@@ -14,29 +14,7 @@ export default async function handler(req, res) {
     const concept = mode === "idea"
       ? `The user described their website idea as: "${value}"`
       : `The user's website is at: ${value}`;
-    const prompt = `${concept}
-You are a friendly startup advisor helping non-technical people understand whether their website idea already exists online.
-Do the following:
-1. Understand the core concept.
-2. Identify likely similar existing websites, tools, apps, or products.
-3. Identify the top 3 most direct competitors or competitor search directions.
-4. Decide how original the idea is.
-5. Give one honest, friendly, actionable recommendation.
-Return ONLY valid JSON in this exact format, no markdown, no backticks, just raw JSON:
-{
-  "similar": [
-    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"},
-    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"},
-    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"}
-  ],
-  "originality": "<unique|some_competition|already_exists>",
-  "competitors": [
-    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence how the user's idea is different or could be better>"},
-    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"},
-    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"}
-  ],
-  "next_step": "<one friendly, specific, actionable recommendation in plain English — 2-3 sentences max>"
-}`;
+    const prompt = `${concept}\nYou are a friendly startup advisor. Return ONLY raw JSON, no markdown, no backticks:\n{"similar":[{"name":"x","description":"x","similarity":"Very similar"},{"name":"x","description":"x","similarity":"Somewhat similar"},{"name":"x","description":"x","similarity":"Slightly similar"}],"originality":"unique","competitors":[{"name":"x","url":"https://x.com","what_they_do":"x","your_edge":"x"},{"name":"x","url":"https://x.com","what_they_do":"x","your_edge":"x"},{"name":"x","url":"https://x.com","what_they_do":"x","your_edge":"x"}],"next_step":"x"}`;
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
@@ -53,7 +31,6 @@ Return ONLY valid JSON in this exact format, no markdown, no backticks, just raw
       return res.status(500).json({ error: data.error?.message || "Gemini request failed" });
     }
     let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    // Strip markdown code blocks if present
     text = text.replace(/```json/g, "").replace(/```/g, "").trim();
     const parsed = JSON.parse(text);
     return res.status(200).json(parsed);
