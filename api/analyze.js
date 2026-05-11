@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       : `The user's website is at: ${value}`;
     const prompt = `${concept}\nYou are a friendly startup advisor. Return ONLY raw JSON, no markdown, no backticks:\n{"similar":[{"name":"x","description":"x","similarity":"Very similar"},{"name":"x","description":"x","similarity":"Somewhat similar"},{"name":"x","description":"x","similarity":"Slightly similar"}],"originality":"unique","competitors":[{"name":"x","url":"https://x.com","what_they_do":"x","your_edge":"x"},{"name":"x","url":"https://x.com","what_they_do":"x","your_edge":"x"},{"name":"x","url":"https://x.com","what_they_do":"x","your_edge":"x"}],"next_step":"x"}`;
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
