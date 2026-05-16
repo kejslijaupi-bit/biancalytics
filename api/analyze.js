@@ -62,7 +62,6 @@ Here are real Google search results related to it:
 ${JSON.stringify(searchResults, null, 2)}
 
 Your task:
-Your task:
 - The product is about checking whether a website/app/startup idea already exists online.
 - Do NOT classify it as website analytics, user behavior analytics, or traffic analytics unless the user explicitly says that.
 - Find competitors that help users validate ideas, find similar startups, check competitors, or research whether an idea already exists.
