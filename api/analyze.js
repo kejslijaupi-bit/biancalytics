@@ -47,8 +47,8 @@ export default async function handler(req, res) {
     }
 
     const searchQuery = mode === "url"
-  ? `${value} website idea validator check if startup idea exists competitors`
-  : `${value} similar startup idea exists competitor checker alternative`;
+  ? `"${value}" startup idea validation tool OR similar startup finder OR startup competitor checker`
+  : `"${value}" existing startup OR similar SaaS OR startup validation platform OR competitor finder`;
 
 const searchResults = await searchCompetitors(searchQuery);
 
@@ -67,6 +67,8 @@ Your task:
 - Find competitors that help users validate ideas, find similar startups, check competitors, or research whether an idea already exists.
 - Popularity does not matter. The question is: does something similar already exist?
 - Avoid unrelated tools like Google Analytics, Hotjar, or Mixpanel unless the submitted idea is actually about analytics.
+- ONLY return competitors that directly help users discover whether startup ideas or websites already exist.
+- If search results are unrelated, ignore them instead of forcing a match.
 
 Return ONLY valid JSON:
 
