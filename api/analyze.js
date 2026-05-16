@@ -47,8 +47,8 @@ export default async function handler(req, res) {
     }
 
     const searchQuery = mode === "url"
-  ? `"${value}" startup idea validation tool OR similar startup finder OR startup competitor checker`
-  : `"${value}" existing startup OR similar SaaS OR startup validation platform OR competitor finder`;
+  ? `"${value}" similar website finder OR product competitor search OR startup validation platform`
+  : `"${value}" existing SaaS competitor OR similar product finder OR startup idea validation`;
 
 const searchResults = await searchCompetitors(searchQuery);
 
@@ -62,13 +62,34 @@ Here are real Google search results related to it:
 ${JSON.stringify(searchResults, null, 2)}
 
 Your task:
-- The product is about checking whether a website/app/startup idea already exists online.
-- Do NOT classify it as website analytics, user behavior analytics, or traffic analytics unless the user explicitly says that.
-- Find competitors that help users validate ideas, find similar startups, check competitors, or research whether an idea already exists.
-- Popularity does not matter. The question is: does something similar already exist?
-- Avoid unrelated tools like Google Analytics, Hotjar, or Mixpanel unless the submitted idea is actually about analytics.
-- ONLY return competitors that directly help users discover whether startup ideas or websites already exist.
-- If search results are unrelated, ignore them instead of forcing a match.
+
+- The product checks whether a REAL WEBSITE / PRODUCT / STARTUP already exists online.
+- It is NOT a domain checker.
+- It is NOT a username checker.
+- It is NOT a startup name generator.
+- It is NOT a branding tool.
+- It is NOT a domain availability tool.
+
+ONLY include competitors that:
+- search existing websites/products
+- discover similar startups
+- validate startup ideas
+- find competing SaaS products
+- compare products/apps/business ideas
+
+DO NOT include:
+- Namechk
+- Domainr
+- startup name generators
+- domain registrars
+- branding tools
+- username availability tools
+
+Popularity does not matter.
+The ONLY question is:
+"Does a similar website/product/business already exist online?"
+
+If no true competitors exist, return fewer competitors instead of unrelated ones.
 
 Return ONLY valid JSON:
 
