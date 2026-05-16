@@ -1,111 +1,102 @@
 import { callWithFallback, extractJson } from "./_providers.js";
 
-async function fetchWebsiteSummary(url) {
+async function searchCompetitors(query) {
+  if (!process.env.SERPER_API_KEY) {
+    return [];
+  }
+
   try {
-    const response = await fetch(url, {
+    const response = await fetch("https://google.serper.dev/search", {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0 BiancalyticsBot/1.0"
-      }
+        "X-API-KEY": process.env.SERPER_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        q: query,
+        num: 8
+      })
     });
 
-    const html = await response.text();
+    const data = await response.json();
 
-    const title =
-      html.match(/<title[^>]*>(.*?)<\/title>/is)?.[1]?.trim() || "";
-
-    const description =
-      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1]?.trim() ||
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i)?.[1]?.trim() ||
-      "";
-
-    const text = html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 4000);
-
-    return {
-      title,
-      description,
-      text
-    };
+    return (data.organic || []).map((item) => ({
+      title: item.title,
+      link: item.link,
+      snippet: item.snippet
+    }));
   } catch {
-    return null;
+    return [];
   }
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({
+      error: "Method not allowed"
+    });
   }
 
   try {
     const { mode, value } = req.body || {};
 
     if (!value || !mode) {
-      return res.status(400).json({ error: "Missing mode or value" });
+      return res.status(400).json({
+        error: "Missing mode or value"
+      });
     }
 
-    let concept;
+    const searchResults = await searchCompetitors(value);
 
-    if (mode === "url") {
-      const site = await fetchWebsiteSummary(value);
+    const prompt = `
+The user submitted this startup idea or website:
 
-      concept = site
-        ? `The user's website URL is: ${value}
+${value}
 
-Website title:
-${site.title}
+Here are real Google search results related to it:
 
-Website meta description:
-${site.description}
+${JSON.stringify(searchResults, null, 2)}
 
-Visible website text:
-${site.text}
+Your task:
+- Identify real competitors
+- Determine whether the idea already exists
+- Compare based on actual search results
+- Avoid unrelated websites
+- Be practical and realistic
 
-Analyze what this website actually does based on the title, description, and visible text. Do not guess from the URL alone.`
-        : `The user's website is at: ${value}. The website content could not be fetched, so analyze cautiously and say that the comparison may be limited.`;
-    } else {
-      concept = `The user described their website idea as: "${value}"`;
-    }
+Return ONLY valid JSON:
 
-    const prompt = `${concept}
-
-You are a friendly startup advisor helping non-technical people understand whether their website idea already exists online.
-
-Important:
-- If the user provided a URL, compare based on the website's actual content, not the domain name alone.
-- Do not invent unrelated competitors.
-- Competitors must match the same core product/problem.
-- If uncertain, say "possible competitor" and explain why.
-- Return practical, useful results.
-
-Return ONLY valid JSON in this exact format:
 {
   "similar": [
-    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"},
-    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"},
-    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"}
+    {
+      "name": "site name",
+      "description": "what it does",
+      "similarity": "Very similar"
+    }
   ],
-  "originality": "<unique|some_competition|already_exists>",
+  "originality": "unique",
   "competitors": [
-    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"},
-    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"},
-    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"}
+    {
+      "name": "site",
+      "url": "https://...",
+      "what_they_do": "description",
+      "your_edge": "possible advantage"
+    }
   ],
-  "next_step": "<one friendly, specific, actionable recommendation in plain English — 2-3 sentences max>"
-}`;
+  "next_step": "helpful recommendation"
+}
+`;
 
     const { text, provider } = await callWithFallback(prompt, {
       jsonMode: true
     });
 
     const parsed = extractJson(text);
+
     parsed.provider_used = provider;
 
     return res.status(200).json(parsed);
+
   } catch (err) {
     return res.status(500).json({
       error: err.message || "Something went wrong"
