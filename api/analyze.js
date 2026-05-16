@@ -1,129 +1,203 @@
 import { callWithFallback, extractJson } from "./_providers.js";
 
-async function searchCompetitors(query) {
-  if (!process.env.SERPER_API_KEY) {
-    return [];
-  }
-
+async function fetchWebsiteText(url) {
   try {
-    const response = await fetch("https://google.serper.dev/search", {
-      method: "POST",
+    const response = await fetch(url, {
       headers: {
-        "X-API-KEY": process.env.SERPER_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        q: query,
-        num: 8
-      })
+        "User-Agent": "Mozilla/5.0 BiancalyticsBot/1.0"
+      }
     });
 
-    const data = await response.json();
+    const html = await response.text();
 
-    return (data.organic || []).map((item) => ({
-      title: item.title,
-      link: item.link,
-      snippet: item.snippet
-    }));
+    const title =
+      html.match(/<title[^>]*>(.*?)<\/title>/is)?.[1]?.trim() || "";
+
+    const description =
+      html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i)?.[1]?.trim() ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']description["']/i)?.[1]?.trim() ||
+      "";
+
+    const visibleText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 5000);
+
+    return { title, description, visibleText };
   } catch {
-    return [];
+    return null;
   }
+}
+
+async function searchWeb(query) {
+  if (!process.env.SERPER_API_KEY) return [];
+
+  const response = await fetch("https://google.serper.dev/search", {
+    method: "POST",
+    headers: {
+      "X-API-KEY": process.env.SERPER_API_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      q: query,
+      num: 10
+    })
+  });
+
+  const data = await response.json();
+
+  return (data.organic || []).map((item) => ({
+    title: item.title,
+    link: item.link,
+    snippet: item.snippet
+  }));
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed"
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const { mode, value } = req.body || {};
 
     if (!value || !mode) {
-      return res.status(400).json({
-        error: "Missing mode or value"
-      });
+      return res.status(400).json({ error: "Missing mode or value" });
     }
 
-    const searchQuery = mode === "url"
-  ? `"${value}" similar website finder OR product competitor search OR startup validation platform`
-  : `"${value}" existing SaaS competitor OR similar product finder OR startup idea validation`;
+    let websiteInfo = null;
 
-const searchResults = await searchCompetitors(searchQuery);
+    if (mode === "url") {
+      websiteInfo = await fetchWebsiteText(value);
+    }
 
-    const prompt = `
-The user submitted this startup idea or website:
+    const understandingPrompt =
+      mode === "url"
+        ? `
+The user submitted this website URL:
 
 ${value}
 
-Here are real Google search results related to it:
+Here is the website content:
 
-${JSON.stringify(searchResults, null, 2)}
+Title:
+${websiteInfo?.title || "No title found"}
+
+Meta description:
+${websiteInfo?.description || "No description found"}
+
+Visible text:
+${websiteInfo?.visibleText || "Could not fetch visible text"}
 
 Your task:
-
-- The product checks whether a REAL WEBSITE / PRODUCT / STARTUP already exists online.
-- It is NOT a domain checker.
-- It is NOT a username checker.
-- It is NOT a startup name generator.
-- It is NOT a branding tool.
-- It is NOT a domain availability tool.
-
-ONLY include competitors that:
-- search existing websites/products
-- discover similar startups
-- validate startup ideas
-- find competing SaaS products
-- compare products/apps/business ideas
-
-DO NOT include:
-- Namechk
-- Domainr
-- startup name generators
-- domain registrars
-- branding tools
-- username availability tools
-
-Popularity does not matter.
-The ONLY question is:
-"Does a similar website/product/business already exist online?"
-
-If no true competitors exist, return fewer competitors instead of unrelated ones.
+Identify what this website/product actually does.
 
 Return ONLY valid JSON:
-
 {
-  "similar": [
-    {
-      "name": "site name",
-      "description": "what it does",
-      "similarity": "Very similar"
-    }
-  ],
-  "originality": "unique",
-  "competitors": [
-    {
-      "name": "site",
-      "url": "https://...",
-      "what_they_do": "description",
-      "your_edge": "possible advantage"
-    }
-  ],
-  "next_step": "helpful recommendation"
+  "product_summary": "one clear sentence explaining what the website does",
+  "product_category": "short category, for example: video sharing platform, language learning app, ride sharing marketplace",
+  "search_query": "best Google search query to find direct competitors and alternatives"
 }
+
+Rules:
+- Do not focus on the domain name.
+- Do not focus on hosting/authentication pages.
+- Focus on the real user-facing product or service.
+- The search query should find websites/products that do the same thing.
+`
+        : `
+The user described this website/app/startup idea:
+
+${value}
+
+Your task:
+Identify what kind of product this is.
+
+Return ONLY valid JSON:
+{
+  "product_summary": "one clear sentence explaining the idea",
+  "product_category": "short category",
+  "search_query": "best Google search query to find direct competitors and alternatives"
+}
+
+Rules:
+- Focus on what the product does.
+- The search query should find websites/products that solve the same problem.
 `;
 
-    const { text, provider } = await callWithFallback(prompt, {
+    const understandingResult = await callWithFallback(understandingPrompt, {
       jsonMode: true
     });
 
-    const parsed = extractJson(text);
+    const understanding = extractJson(understandingResult.text);
 
-    parsed.provider_used = provider;
+    const searchQuery =
+      understanding.search_query ||
+      `${understanding.product_category} competitors alternatives similar websites`;
+
+    const searchResults = await searchWeb(searchQuery);
+
+    const finalPrompt = `
+The user submitted:
+
+${value}
+
+Product summary:
+${understanding.product_summary}
+
+Product category:
+${understanding.product_category}
+
+Search query used:
+${searchQuery}
+
+Real Google search results:
+${JSON.stringify(searchResults, null, 2)}
+
+Your task:
+Find direct competitors or alternatives.
+
+Important rules:
+- Competitors must do the same main thing as the submitted website/product.
+- If input is YouTube, competitors should be video platforms like Vimeo, Dailymotion, Twitch, TikTok, Rumble.
+- If input is Airbnb, competitors should be rental marketplaces.
+- If input is Duolingo, competitors should be language learning apps.
+- Do NOT include SEO tools, audit tools, domain tools, name generators, blogs, podcasts, or unrelated websites.
+- Popularity does not matter.
+- The question is: "What other websites/products do the same thing?"
+- If search results are weak, use your knowledge but stay in the same product category.
+
+Return ONLY valid JSON in this exact format:
+{
+  "similar": [
+    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"},
+    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"},
+    {"name": "<site name>", "description": "<one sentence what it does>", "similarity": "<Very similar|Somewhat similar|Slightly similar>"}
+  ],
+  "originality": "<unique|some_competition|already_exists>",
+  "competitors": [
+    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"},
+    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"},
+    {"name": "<site name>", "url": "<https://... actual site url>", "what_they_do": "<one sentence>", "your_edge": "<one sentence>"}
+  ],
+  "next_step": "<one friendly, specific, actionable recommendation in plain English — 2-3 sentences max>"
+}
+`;
+
+    const finalResult = await callWithFallback(finalPrompt, {
+      jsonMode: true
+    });
+
+    const parsed = extractJson(finalResult.text);
+
+    parsed.provider_used = finalResult.provider;
+    parsed.product_summary = understanding.product_summary;
+    parsed.product_category = understanding.product_category;
 
     return res.status(200).json(parsed);
-
   } catch (err) {
     return res.status(500).json({
       error: err.message || "Something went wrong"
