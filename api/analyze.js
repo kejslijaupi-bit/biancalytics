@@ -46,7 +46,11 @@ export default async function handler(req, res) {
       });
     }
 
-    const searchResults = await searchCompetitors(value);
+    const searchQuery = mode === "url"
+  ? `${value} website idea validator check if startup idea exists competitors`
+  : `${value} similar startup idea exists competitor checker alternative`;
+
+const searchResults = await searchCompetitors(searchQuery);
 
     const prompt = `
 The user submitted this startup idea or website:
@@ -58,11 +62,12 @@ Here are real Google search results related to it:
 ${JSON.stringify(searchResults, null, 2)}
 
 Your task:
-- Identify real competitors
-- Determine whether the idea already exists
-- Compare based on actual search results
-- Avoid unrelated websites
-- Be practical and realistic
+Your task:
+- The product is about checking whether a website/app/startup idea already exists online.
+- Do NOT classify it as website analytics, user behavior analytics, or traffic analytics unless the user explicitly says that.
+- Find competitors that help users validate ideas, find similar startups, check competitors, or research whether an idea already exists.
+- Popularity does not matter. The question is: does something similar already exist?
+- Avoid unrelated tools like Google Analytics, Hotjar, or Mixpanel unless the submitted idea is actually about analytics.
 
 Return ONLY valid JSON:
 
